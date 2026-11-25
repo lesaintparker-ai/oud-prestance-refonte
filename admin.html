@@ -1,0 +1,55 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Admin | Oud Prestance</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#0b0b0b;--card:#161412;--gold:#d4af6a;--txt:#f3ece0;--mut:#9a9186;--err:#e5736b;--ok:#7fd18b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.5 Georgia,serif}
+main{max-width:900px;margin:auto;padding:16px}h1,h2{color:var(--gold);font-weight:400;margin:8px 0}
+button{font:inherit;cursor:pointer;border-radius:24px;padding:8px 16px;border:1px solid var(--gold);background:none;color:var(--gold)}
+button.pri{background:var(--gold);color:#111;font-weight:700}button.del{border-color:var(--err);color:var(--err)}
+input{background:#0f0e0d;border:1px solid #3a342c;color:var(--txt);border-radius:10px;padding:10px;font:inherit;width:100%;margin:4px 0}
+.card{background:var(--card);border-radius:14px;padding:14px;margin:12px 0}.row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.st{padding:2px 10px;border-radius:20px;font-size:13px;border:1px solid}.s0{color:var(--gold)}.s1{color:var(--ok)}.s2{color:var(--err)}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.bar button.on{background:var(--gold);color:#111}
+a{color:var(--gold)}small,.mut{color:var(--mut)}.msg{color:var(--err);min-height:22px}.inl{display:flex;gap:8px;align-items:center}.inl input{width:110px}
+</style></head><body><main id="app"></main>
+<script>
+const SUPABASE_URL="https://eombqdcijphlrgfwbkji.supabase.co", SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvbWJxZGNpanBobHJnZndia2ppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0NzMxODYsImV4cCI6MjExMTA0OTE4Nn0.sOIgXixuctCRMd8OWhGYyxJzm4TTnUngbZimFh4aA7U";
+const db=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const $=s=>document.querySelector(s), fmt=n=>Number(n).toLocaleString("fr-FR")+" FCFA";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ST=["En attente de confirmation","Confirmée","Annulée"], CL=["s0","s1","s2"];
+let orders=[], prods=[], filter="Tous";
+function login(msg=""){ $("#app").innerHTML=`<h1>Administration</h1><div class="card"><input id="e" type="email" placeholder="Email" autocomplete="username">
+<input id="p" type="password" placeholder="Mot de passe" autocomplete="current-password"><div class="msg">${esc(msg)}</div><button class="pri" onclick="signIn()">Connexion</button></div>`}
+async function signIn(){const {error}=await db.auth.signInWithPassword({email:$("#e").value.trim(),password:$("#p").value});
+  if(error)return login("Connexion refusée"); load()}
+async function load(){
+  const {data:{session}}=await db.auth.getSession(); if(!session)return login();
+  const [o,p]=await Promise.all([db.from("orders").select("*").order("created_at",{ascending:false}),db.from("products").select("*")]);
+  if(o.error)return login("Accès refusé (compte non admin ?)"); orders=o.data; prods=p.data||[]; render()}
+function render(){
+  const n=s=>orders.filter(o=>o.status===s).length, list=orders.filter(o=>filter==="Tous"||o.status===filter);
+  $("#app").innerHTML=`<div class="row"><h1>Commandes</h1><div><button onclick="load()">Actualiser</button> <button onclick="db.auth.signOut().then(()=>login())">Quitter</button></div></div>
+  <div class="card"><h2>Stock et prix</h2>${prods.map(p=>`<div class="row"><b>${esc(p.name)}</b><div class="inl">Stock <input type="number" min="0" id="st-${esc(p.id)}" value="${p.stock}">
+  Prix <input type="number" min="0" id="pr-${esc(p.id)}" value="${p.price}"><button class="pri" onclick="saveProd('${esc(p.id)}')">Enregistrer</button></div></div>`).join("")}<div class="msg" id="pm"></div></div>
+  <div class="bar">${["Tous",...ST].map(s=>`<button class="${filter===s?"on":""}" onclick="filter='${s}';render()">${s}${s==="Tous"?` (${orders.length})`:` (${n(s)})`}</button>`).join("")}</div>
+  ${list.map(card).join("")||"<p class='mut'>Aucune commande.</p>"}<div class="msg" id="err"></div>`}
+function card(o){const i=ST.indexOf(o.status), tel=o.phone.replace(/\D/g,""), wa=tel.length===10?"225"+tel:tel;
+  return `<div class="card"><div class="row"><b>${esc(o.reference)}</b><span class="st ${CL[i]}">${esc(o.status)}</span></div>
+  <small>${new Date(o.created_at).toLocaleString("fr-FR")}</small>
+  <p><b>${esc(o.full_name)}</b> | <a href="tel:${esc(tel)}">${esc(o.phone)}</a> | <a href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener">WhatsApp client</a><br>
+  ${esc(o.city)}, ${esc(o.commune)}, ${esc(o.district)}<br>${esc(o.address)}${o.instructions?`<br><small>Instructions : ${esc(o.instructions)}</small>`:""}</p>
+  ${o.items.map(x=>`<div class="row"><span>${esc(x.name)} ${esc(x.size)} x ${Number(x.qty)}</span><span>${fmt(x.unit_price*x.qty)}</span></div>`).join("")}
+  <div class="row mut"><span>Réduction${o.promo_code?" ("+esc(o.promo_code)+")":""}</span><span>-${fmt(o.discount)}</span></div>
+  <div class="row mut"><span>Livraison</span><span>${fmt(o.delivery_fee)}</span></div>
+  <div class="row"><b>Total</b><b>${fmt(o.total)}</b></div>
+  ${i===0?`<div class="bar"><button class="pri" onclick="setSt('${esc(o.reference)}','Confirmée')">Confirmer</button><button class="del" onclick="setSt('${esc(o.reference)}','Annulée')">Annuler</button></div>`
+  :i===1?`<div class="bar"><button class="del" onclick="setSt('${esc(o.reference)}','Annulée')">Annuler</button></div>`:""}</div>`}
+async function setSt(ref,s){ if(!confirm(`${s==="Annulée"?"Annuler":"Confirmer"} la commande ${ref} ?${s==="Annulée"?"\nLe stock sera restitué.":""}`))return;
+  const {error}=await db.rpc("admin_set_status",{p_ref:ref,p_status:s}); if(error)return $("#err").textContent=error.message; load()}
+async function saveProd(id){const stock=parseInt($("#st-"+id).value,10), price=parseInt($("#pr-"+id).value,10);
+  if(!(stock>=0)||!(price>=0))return $("#pm").textContent="Valeurs invalides";
+  const {error}=await db.from("products").update({stock,price}).eq("id",id); $("#pm").textContent=error?error.message:"Enregistré"}
+load();
+</script></body></html>
